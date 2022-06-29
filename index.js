@@ -22,19 +22,37 @@ readFile('3000.txt', 'SL').then(() => { // Read SL
 
     MongoClient.connect('mongodb://localhost/tWow', async (err, client) => {
       if (err) return console.error(err);
-      console.log(`Insert Compared Result... ${DataSetArr.length} datas`);
-      const db = client.db('data-set');
-      const coll = db.collection('sl-set');
+      let db = client.db('data-set');
+      let coll = db.collection('sl-set');
+
+      console.log(`Compared Result... ${DataSetArr.length} datas`);
       let toInsert = [];
+      let currentLimit = 10000;
+      let lastRes = 0;
+      const stepper = 1000;
+
       for (let i = 0; i < DataSetArr.length; i++) {
         toInsert.push(DataSetArr[i]);
+
         const isLastItem = i === DataSetArr.length - 1;
-        if (i % 500000 === 0 || isLastItem) {
-          // console.log(`Batch - ${toInsert.length} datas`);
-          await coll.insertMany(toInsert, function () {
+        if (i % currentLimit === 0 || isLastItem) {
+          db = client.db('data-set');
+          coll = db.collection('sl-set');
+          await coll.insertMany(toInsert).then(() => {
             console.log(`${getCurrentTimestamp()} - End Write Batch`);
+            const res = process.memoryUsage().heapUsed / 1024 / 1024;
+            console.log(res);
+            lastRes = res;
+            if (res > lastRes) {
+              currentLimit = -stepper;
+              console.log(`Decrease Batch to ${currentLimit}`);
+            } else {
+              currentLimit = +stepper;
+              console.log('RAM no problem');
+            }
+
+            toInsert = [];
           });
-          toInsert = [];
         }
       }
     });
